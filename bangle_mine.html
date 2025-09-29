@@ -1,0 +1,347 @@
+<html>
+
+<head>
+    <title>Bangle.js Data streaming</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://cdn.rawgit.com/kimeiga/bahunya/css/bahunya-0.1.1.css" />
+</head>
+
+<body>
+    <script src="https://www.puck-js.com/puck.js"></script>
+    <script src="deps/FileSaver.js"></script>
+    <h2 style="text-align: center;">Bangle.js data streaming app</h2>
+
+    <main>
+        <article>
+            <p id="pMain">Ready to connect</p>
+            <div>
+                <label for="subjectInput">Subject Number: </label>
+                <input type="number" id="subjectInput" placeholder="Enter subject ID" min="1">
+            </div>
+            <br>
+            <button id="btnConnect">Connect</button>
+            <button id="btnMarker" disabled>Add Marker</button>
+            <p>X: <span id="pX"></span></p>
+            <p>Y: <span id="pY"></span></p>
+            <p>Z: <span id="pZ"></span></p>
+            <p>PPG raw: <span id="pPPG"></span></p>
+            <p>HR: <span id="pHR"></span></p>
+            <p>Steps: <span id="pSteps"></span></p>
+
+        </article>
+
+    </main>
+
+
+    <script>
+        // Code to upload to Bangle.js
+
+
+        var BANGLE_CODE = ` 
+var start = Date.now();
+let start2 = new Date();
+// Converti in ora locale italiana
+// Imposta manualmente: 2 per ora legale (CEST), 1 per ora solare (CET)
+let italianOffset = 2; // ore da aggiungere (modifica questo valore)
+start2.setHours(start2.getHours() + italianOffset);
+var subjectId = "SUBJECT_PLACEHOLDER";
+
+// Create storage files with open handles
+var startFile = require("Storage").open(subjectId + "bangle_startTs.txt", "w");
+startFile.write(start2.toISOString() + "\\n");
+startFile.write(start.toString());
+
+
+var accFile = require("Storage").open(subjectId + "bangle_acc.csv", "w");
+accFile.write("ms,x,y,z\\n");
+
+var ppgFile = require("Storage").open(subjectId + "bangle_ppg.csv", "w");
+ppgFile.write("ms,raw,filt,bpm,confidence\\n");
+
+var stepsFile = require("Storage").open(subjectId + "bangle_steps.csv", "w");
+stepsFile.write("ms,steps\\n");
+
+Bangle.on('accel',function(a) {
+  var d = [
+    "A",
+    Math.round(Date.now() - start),
+    Math.round(a.x * 8192),
+    Math.round(a.y * 8192),
+    Math.round(a.z * 8192)
+    ];
+  var dataStr = d.join(",");
+  Bluetooth.println(dataStr);
+
+  accFile.write(dataStr.substring(2) + "\\n"); // Remove "A," and add newline
+})
+
+Bangle.on('step', function(up) {
+    var d = [
+      "S",
+      Date.now() - start,
+      up
+    ];
+    var dataStr = d.join(",");
+    Bluetooth.println(dataStr);
+    
+    stepsFile.write(dataStr.substring(2) + "\\n"); // Remove "S," and add newline
+});
+
+Bangle.setHRMPower(1);
+
+// HRM-raw with all data
+Bangle.on('HRM-raw',function(hrm) {
+    var d = [
+      "G",
+      Math.round(Date.now() - start),
+      hrm.raw,
+      hrm.filt,
+      hrm.bpm,
+      hrm.confidence
+      ];
+    var dataStr = d.join(",");
+    Bluetooth.println(dataStr);
+
+    ppgFile.write(dataStr.substring(2) + "\\n"); // Remove "G," and add newline
+});
+
+// Send timestamp after everything is set up
+setTimeout(function() {
+    Bluetooth.println("I," + start2.toISOString());
+}, 1000);
+`;
+        let pMain = document.getElementById("pMain")
+        let btnConnect = document.getElementById("btnConnect")
+        let btnMarker = document.getElementById("btnMarker")
+        let subjectInput = document.getElementById("subjectInput")
+        let pX = document.getElementById("pX")
+        let pY = document.getElementById("pY")
+        let pZ = document.getElementById("pZ")
+        let pPPG = document.getElementById("pPPG")
+        let pSteps = document.getElementById("pSteps")
+        let pHR = document.getElementById("pHR")
+
+        let result = {} 
+
+
+        // detect file saving capability
+        try {
+            new Blob
+        } catch (e) {
+            console.error(e)
+            pMain.textContent = 'File saving not supported'
+            btnConnect.disabled = true
+        }
+
+        // When we click the connect button...
+        let connection
+        btnConnect.addEventListener("click", function () {
+            // disconnect if connected already
+            if (connection) {
+                connection.close()
+                connection = undefined
+                pMain.textContent = 'Ready to connect'
+                btnConnect.textContent = 'Connect'  // Ripristina il testo del bottone
+                btnMarker.disabled = true  // Disabilita il marker
+
+                result.endTs = new Date()
+                // Aggiungi 2 ore per ora italiana (coerente con startTs)
+                result.endTs.setHours(result.endTs.getHours() + 2)
+                console.log(result)
+                
+                // Get subject ID for filenames
+                let subjectId = subjectInput.value.trim()
+                if (!subjectId) {
+                    alert("Subject ID is required for saving files!")
+                    return
+                }
+                let subjectPrefix = `SUBJECT${subjectId}`
+                
+                // Create CSV for accelerometer data
+                if (result.accel && result.accel.length > 0) {
+                    let accelCSV = "ms,x,y,z\n"
+                    result.accel.forEach(row => {
+                        accelCSV += `${row.ms},${row.x},${row.y},${row.z}\n`
+                    })
+                    let accelBlob = new Blob([accelCSV], { type: "text/csv;charset=utf-8" })
+                    let accelFilename = subjectPrefix + '_acc.csv'
+                    saveAs(accelBlob, accelFilename)
+                }
+                
+                // Create CSV for PPG data with all HRM-raw values
+                if (result.ppg && result.ppg.length > 0) {
+                    let ppgCSV = "ms,raw,filt,bpm,confidence\n"
+                    
+                    result.ppg.forEach(row => {
+                        ppgCSV += `${row.ms},${row.raw},${row.filt},${row.bpm},${row.confidence}\n`
+                    })
+                    
+                    let ppgBlob = new Blob([ppgCSV], { type: "text/csv;charset=utf-8" })
+                    let ppgFilename = subjectPrefix + '_ppg.csv'
+                    saveAs(ppgBlob, ppgFilename)
+                }
+
+                // Create CSV for steps data
+                if (result.steps && result.steps.length > 0) {
+                    let stepsCSV = "ms,steps\n"
+                    result.steps.forEach(row => {
+                        stepsCSV += `${row.ms},${row.steps}\n`
+                    })
+                    let stepsBlob = new Blob([stepsCSV], { type: "text/csv;charset=utf-8" })
+                    let stepsFilename = subjectPrefix + '_steps.csv'
+                    saveAs(stepsBlob, stepsFilename)
+                }
+
+                // Create timestamps file
+                let duration = new Date(result.endTs).getTime() - new Date(result.startTs).getTime()
+                // let timestampsContent = `Start Time: ${result.startTs.toISOString()}\nEnd Time: ${result.endTs.toISOString()}\nDuration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)`
+                let timestampsContent = 
+                    `Start Time (UTC): ${result.startTs.toISOString()}\n` +
+                    `End Time (UTC): ${result.endTs.toISOString()}\n` +
+                    `Duration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)\n` +
+                    `Start Unix (ms): ${result.startTs.getTime()}\n` +
+                    `End Unix (ms): ${result.endTs.getTime()}\n` +
+                    `Duration Unix (ms): ${result.endTs.getTime() - result.startTs.getTime()}\n`;
+                // Add markers if any
+                if (result.markers && result.markers.length > 0) {
+                    timestampsContent += '\n\nMarkers:'
+                    result.markers.forEach((marker, index) => {
+                        timestampsContent += `\nMarker ${index + 1}: ${marker.toISOString()}`
+                    })
+                }
+                
+                let timestampsBlob = new Blob([timestampsContent], { type: "text/plain;charset=utf-8" })
+                let timestampsFilename = subjectPrefix + '_timestamps.txt'
+                saveAs(timestampsBlob, timestampsFilename)
+
+                // Reset markers after saving
+                result.markers = []
+                console.log("Markers reset after disconnect")
+
+                return
+            } else {
+                // Validate subject input before connecting
+                let subjectId = subjectInput.value.trim()
+                if (!subjectId) {
+                    alert("Please enter a Subject ID before connecting!")
+                    return
+                }
+                
+                // Connect
+                Puck.connect(function (c) {
+                    if (!c) {
+                        return
+                    }
+                    connection = c
+                    pMain.textContent = 'Connected!'
+                    btnConnect.textContent = 'Disconnect'
+                    btnMarker.disabled = false  // Abilita il marker
+                    // initialise result
+                    result.startTs = new Date()
+                    // result.startTs = []
+                    result.accel = []
+                    result.ppg = []
+                    result.steps = []
+                    result.hr = []
+                    // Handle the data we get back, and call 'onLine'
+                    // whenever we get a new line
+                    var buf = "";
+                    connection.on("data", function (d) {
+                        buf += d;
+                        var l = buf.split("\n")
+                        buf = l.pop()
+                        l.forEach(onLine)
+                    })
+
+                    // First, reset the Bangle
+                    connection.write("reset();\n", function () {
+                        // Wait for it to reset itself
+                        setTimeout(function () {
+                            // Prepare the code with subject ID
+                            let subjectPrefix = `SUBJECT${subjectId}`
+                            let codeToSend = BANGLE_CODE.replace("SUBJECT_PLACEHOLDER", subjectPrefix)
+                            
+                            // Now upload our code to it
+                            connection.write("\x03\x10if(1){" + codeToSend + "}\n",
+                                () => {
+                                    console.log("Ready...")
+                                })
+                        }, 1500)
+                    })
+                })
+            }
+        })
+
+        // When we click the marker button...
+        btnMarker.addEventListener("click", function () {
+            if (connection) {  // Solo se connesso
+                let markerTime = new Date()
+                if (!result.markers) {
+                    result.markers = []
+                }
+                result.markers.push(markerTime)
+                console.log("Marker added:", markerTime)
+                
+                // Feedback visivo
+                let originalText = btnMarker.textContent
+                btnMarker.textContent = `Marker ${result.markers.length}`
+                setTimeout(() => {
+                    btnMarker.textContent = originalText
+                }, 1000)
+            }
+        })
+
+        // When we get a line of data, check it and if it's
+        // from the accelerometer, update it
+        function onLine (line) {
+            // console.log("RECEIVED:" + line);
+            var d = line.split(",");
+            if (d.length == 2 && d[0] == "I") {
+                // Rimuovi caratteri di whitespace (inclusi \r, \n) dalla stringa
+                var cleanTimestamp = d[1].trim()
+                result.startTs = new Date(cleanTimestamp)
+            }
+            if (d.length == 5 && d[0] == "A") {
+                // we have an accelerometer reading
+                var accel = {
+                    ms: parseInt(d[1]),
+                    x: parseInt(d[2]),
+                    y: parseInt(d[3]),
+                    z: parseInt(d[4])
+                }
+                pX.textContent = accel.x
+                pY.textContent = accel.y
+                pZ.textContent = accel.z
+
+                result.accel.push(accel)
+            }
+            if (d.length == 6 && d[0] == "G") {
+                // HRM-raw data with all values
+                var ppg = {
+                    ms: parseInt(d[1]),
+                    raw: parseInt(d[2]),
+                    filt: parseInt(d[3]),
+                    bpm: parseFloat(d[4]),
+                    confidence: parseInt(d[5])
+                }
+                pPPG.textContent = ppg.raw  
+                pHR.textContent = ppg.bpm.toFixed(1)
+                // Aggiorna anche HR2 con lo stesso valore bpm
+                result.ppg.push(ppg)
+            }
+            if (d.length == 3 && d[0] == "S") {
+                // we have steps reading
+                var steps = {
+                    ms: parseInt(d[1]),
+                    steps: parseInt(d[2])
+                };
+                pSteps.textContent = steps.steps;
+
+                result.steps.push(steps);
+            }
+        }
+    </script>
+</body>
+
+</html>
