@@ -52,15 +52,15 @@ var startFile = require("Storage").open(subjectId + "bangle_startTs.txt", "w");
 startFile.write(start2.toISOString() + "\\n");
 startFile.write(start.toString());
 
+// Uncomment the lines below to save data in the Bangle's storage
+// var accFile = require("Storage").open(subjectId + "bangle_acc.csv", "w");
+// accFile.write("ms,x,y,z\\n");
 
-var accFile = require("Storage").open(subjectId + "bangle_acc.csv", "w");
-accFile.write("ms,x,y,z\\n");
+// var ppgFile = require("Storage").open(subjectId + "bangle_ppg.csv", "w");
+// ppgFile.write("ms,raw,filt,bpm,confidence\\n");
 
-var ppgFile = require("Storage").open(subjectId + "bangle_ppg.csv", "w");
-ppgFile.write("ms,raw,filt,bpm,confidence\\n");
-
-var stepsFile = require("Storage").open(subjectId + "bangle_steps.csv", "w");
-stepsFile.write("ms,steps\\n");
+// var stepsFile = require("Storage").open(subjectId + "bangle_steps.csv", "w");
+// stepsFile.write("ms,steps\\n");
 
 Bangle.on('accel',function(a) {
   var d = [
@@ -73,7 +73,7 @@ Bangle.on('accel',function(a) {
   var dataStr = d.join(",");
   Bluetooth.println(dataStr);
 
-  accFile.write(dataStr.substring(2) + "\\n"); // Remove "A," and add newline
+  // accFile.write(dataStr.substring(2) + "\\n"); // Remove "A," and add newline
 })
 
 Bangle.on('step', function(up) {
@@ -85,7 +85,7 @@ Bangle.on('step', function(up) {
     var dataStr = d.join(",");
     Bluetooth.println(dataStr);
     
-    stepsFile.write(dataStr.substring(2) + "\\n"); // Remove "S," and add newline
+    // stepsFile.write(dataStr.substring(2) + "\\n"); // Remove "S," and add newline
 });
 
 Bangle.setHRMPower(1);
@@ -103,7 +103,7 @@ Bangle.on('HRM-raw',function(hrm) {
     var dataStr = d.join(",");
     Bluetooth.println(dataStr);
 
-    ppgFile.write(dataStr.substring(2) + "\\n"); // Remove "G," and add newline
+    // ppgFile.write(dataStr.substring(2) + "\\n"); // Remove "G," and add newline
 });
 
 // Send timestamp after everything is set up
