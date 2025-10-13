@@ -41,9 +41,9 @@
         var BANGLE_CODE = ` 
 var start = Date.now();
 let start2 = new Date();
-// Converti in ora locale italiana
-// Imposta manualmente: 2 per ora legale (CEST), 1 per ora solare (CET)
-let italianOffset = 2; // ore da aggiungere (modifica questo valore)
+// Convertion in local time (Italy - Central European Time)
+// Manually set: 2 for daylight saving time (CEST), 1 for standard time (CET)
+let italianOffset = 2; // hours to add (modify this value)
 start2.setHours(start2.getHours() + italianOffset);
 var subjectId = "SUBJECT_PLACEHOLDER";
 
@@ -124,6 +124,85 @@ setTimeout(function() {
 
         let result = {} 
 
+        // Function to save all files
+        function saveAllFiles(disconnectReason = "Manual disconnect") {
+            result.endTs = new Date()
+            // Add 2 hours for local time (consistent with startTs)
+            result.endTs.setHours(result.endTs.getHours() + 2)
+            console.log("Saving files due to:", disconnectReason)
+            console.log(result)
+            
+            // Get subject ID for filenames
+            let subjectId = subjectInput.value.trim()
+            if (!subjectId) {
+                alert("Subject ID is required for saving files!")
+                return
+            }
+            let subjectPrefix = `SUBJECT${subjectId}`
+            
+            // Create CSV for accelerometer data
+            if (result.accel && result.accel.length > 0) {
+                let accelCSV = "ms,x,y,z\n"
+                result.accel.forEach(row => {
+                    accelCSV += `${row.ms},${row.x},${row.y},${row.z}\n`
+                })
+                let accelBlob = new Blob([accelCSV], { type: "text/csv;charset=utf-8" })
+                let accelFilename = subjectPrefix + '_acc.csv'
+                saveAs(accelBlob, accelFilename)
+            }
+            
+            // Create CSV for PPG data with all HRM-raw values
+            if (result.ppg && result.ppg.length > 0) {
+                let ppgCSV = "ms,raw,filt,bpm,confidence\n"
+                
+                result.ppg.forEach(row => {
+                    ppgCSV += `${row.ms},${row.raw},${row.filt},${row.bpm},${row.confidence}\n`
+                })
+                
+                let ppgBlob = new Blob([ppgCSV], { type: "text/csv;charset=utf-8" })
+                let ppgFilename = subjectPrefix + '_ppg.csv'
+                saveAs(ppgBlob, ppgFilename)
+            }
+
+            // Create CSV for steps data
+            if (result.steps && result.steps.length > 0) {
+                let stepsCSV = "ms,steps\n"
+                result.steps.forEach(row => {
+                    stepsCSV += `${row.ms},${row.steps}\n`
+                })
+                let stepsBlob = new Blob([stepsCSV], { type: "text/csv;charset=utf-8" })
+                let stepsFilename = subjectPrefix + '_steps.csv'
+                saveAs(stepsBlob, stepsFilename)
+            }
+
+            // Create timestamps file
+            let duration = new Date(result.endTs).getTime() - new Date(result.startTs).getTime()
+            let timestampsContent = 
+                `Start Time (Local) from Bangle: ${result.startTs.toISOString()}\n` +
+                `Start Time (Local) from Phone: ${result.startTs2.toISOString()}\n` +
+                `End Time (Local): ${result.endTs.toISOString()}\n` +
+                `Duration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)\n` +
+                `Start Unix (ms): ${result.startTs.getTime()}\n` +
+                `End Unix (ms): ${result.endTs.getTime()}\n` +
+                `Duration Unix (ms): ${result.endTs.getTime() - result.startTs.getTime()}\n` +
+                `Disconnect Reason: ${disconnectReason}\n`;
+            
+            // Add markers if any
+            if (result.markers && result.markers.length > 0) {
+                timestampsContent += '\n\nMarkers:'
+                result.markers.forEach((marker, index) => {
+                    timestampsContent += `\nMarker ${index + 1}: ${marker.toISOString()}`
+                })
+            }
+            
+            let timestampsBlob = new Blob([timestampsContent], { type: "text/plain;charset=utf-8" })
+            let timestampsFilename = subjectPrefix + '_timestamps.txt'
+            saveAs(timestampsBlob, timestampsFilename)
+
+            // Reset markers after saving
+            result.markers = []
+            console.log("Markers reset after disconnect")
+        }
 
         // detect file saving capability
         try {
@@ -139,85 +218,14 @@ setTimeout(function() {
         btnConnect.addEventListener("click", function () {
             // disconnect if connected already
             if (connection) {
+                // Save files before disconnecting
+                saveAllFiles("Manual disconnect")
+                
                 connection.close()
                 connection = undefined
                 pMain.textContent = 'Ready to connect'
-                btnConnect.textContent = 'Connect'  // Ripristina il testo del bottone
-                btnMarker.disabled = true  // Disabilita il marker
-
-                result.endTs = new Date()
-                // Aggiungi 2 ore per ora italiana (coerente con startTs)
-                result.endTs.setHours(result.endTs.getHours() + 2)
-                console.log(result)
-                
-                // Get subject ID for filenames
-                let subjectId = subjectInput.value.trim()
-                if (!subjectId) {
-                    alert("Subject ID is required for saving files!")
-                    return
-                }
-                let subjectPrefix = `SUBJECT${subjectId}`
-                
-                // Create CSV for accelerometer data
-                if (result.accel && result.accel.length > 0) {
-                    let accelCSV = "ms,x,y,z\n"
-                    result.accel.forEach(row => {
-                        accelCSV += `${row.ms},${row.x},${row.y},${row.z}\n`
-                    })
-                    let accelBlob = new Blob([accelCSV], { type: "text/csv;charset=utf-8" })
-                    let accelFilename = subjectPrefix + '_acc.csv'
-                    saveAs(accelBlob, accelFilename)
-                }
-                
-                // Create CSV for PPG data with all HRM-raw values
-                if (result.ppg && result.ppg.length > 0) {
-                    let ppgCSV = "ms,raw,filt,bpm,confidence\n"
-                    
-                    result.ppg.forEach(row => {
-                        ppgCSV += `${row.ms},${row.raw},${row.filt},${row.bpm},${row.confidence}\n`
-                    })
-                    
-                    let ppgBlob = new Blob([ppgCSV], { type: "text/csv;charset=utf-8" })
-                    let ppgFilename = subjectPrefix + '_ppg.csv'
-                    saveAs(ppgBlob, ppgFilename)
-                }
-
-                // Create CSV for steps data
-                if (result.steps && result.steps.length > 0) {
-                    let stepsCSV = "ms,steps\n"
-                    result.steps.forEach(row => {
-                        stepsCSV += `${row.ms},${row.steps}\n`
-                    })
-                    let stepsBlob = new Blob([stepsCSV], { type: "text/csv;charset=utf-8" })
-                    let stepsFilename = subjectPrefix + '_steps.csv'
-                    saveAs(stepsBlob, stepsFilename)
-                }
-
-                // Create timestamps file
-                let duration = new Date(result.endTs).getTime() - new Date(result.startTs).getTime()
-                // let timestampsContent = `Start Time: ${result.startTs.toISOString()}\nEnd Time: ${result.endTs.toISOString()}\nDuration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)`
-                let timestampsContent = 
-                    `Start Time (Local): ${result.startTs.toISOString()}\n` +
-                    `End Time (Local): ${result.endTs.toISOString()}\n` +
-                    `Duration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)\n` +
-                    `Start Unix (ms): ${result.startTs.getTime()}\n` +
-                    `End Unix (ms): ${result.endTs.getTime()}\n` +
-                    `Duration Unix (ms): ${result.endTs.getTime() - result.startTs.getTime()}\n`;
-                // Add markers if any
-                if (result.markers && result.markers.length > 0) {
-                    timestampsContent += '\n\nMarkers:'
-                    result.markers.forEach((marker, index) => {
-                        timestampsContent += `\nMarker ${index + 1}: ${marker.toISOString()}`
-                    })
-                }
-                
-                let timestampsBlob = new Blob([timestampsContent], { type: "text/plain;charset=utf-8" })
-                let timestampsFilename = subjectPrefix + '_timestamps.txt'
-                saveAs(timestampsBlob, timestampsFilename)
-
-                // Reset markers after saving
-                result.markers = []
-                console.log("Markers reset after disconnect")
+                btnConnect.textContent = 'Connect'  // Reset button text
+                btnMarker.disabled = true  // Disable marker
 
                 return
             } else {
@@ -236,9 +244,26 @@ setTimeout(function() {
                     connection = c
                     pMain.textContent = 'Connected!'
                     btnConnect.textContent = 'Disconnect'
-                    btnMarker.disabled = false  // Abilita il marker
+                    btnMarker.disabled = false  // Enable marker
+                    
+                    // Add disconnect event listener to handle connection loss
+                    connection.on("close", function() {
+                        console.log("Connection lost unexpectedly")
+                        // Only save if we haven't already saved (connection still exists)
+                        if (connection) {
+                            saveAllFiles("Connection lost")
+                            connection = undefined
+                            pMain.textContent = 'Connection lost - Files saved automatically'
+                            btnConnect.textContent = 'Connect'
+                            btnMarker.disabled = true
+                        }
+                    })
+                    
                     // initialise result
-                    result.startTs = new Date()
+                    result.startTs = new Date() // This will be overwritten by Bangle timestamp
+                    result.startTs2 = new Date() // Phone/WebApp timestamp
+                    // Add 2 hours to phone timestamp for Italian time
+                    result.startTs2.setHours(result.startTs2.getHours() + 2)
                     // result.startTs = []
                     result.accel = []
                     result.ppg = []
@@ -277,6 +302,8 @@ setTimeout(function() {
         btnMarker.addEventListener("click", function () {
             if (connection) {  // Solo se connesso
                 let markerTime = new Date()
+                // Add 2 hours to marker time for Italian time (consistent with other timestamps)
+                markerTime.setHours(markerTime.getHours() + 2)
                 if (!result.markers) {
                     result.markers = []
                 }
@@ -298,7 +325,7 @@ setTimeout(function() {
             // console.log("RECEIVED:" + line);
             var d = line.split(",");
             if (d.length == 2 && d[0] == "I") {
-                // Rimuovi caratteri di whitespace (inclusi \r, \n) dalla stringa
+                // Remove whitespace characters (including \r, \n) from the string
                 var cleanTimestamp = d[1].trim()
                 result.startTs = new Date(cleanTimestamp)
             }
@@ -327,7 +354,6 @@ setTimeout(function() {
                 }
                 pPPG.textContent = ppg.raw  
                 pHR.textContent = ppg.bpm.toFixed(1)
-                // Aggiorna anche HR2 con lo stesso valore bpm
                 result.ppg.push(ppg)
             }
             if (d.length == 3 && d[0] == "S") {
