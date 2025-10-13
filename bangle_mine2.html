@@ -215,9 +215,12 @@ setTimeout(function() {
 
         // When we click the connect button...
         let connection
+        let isManualDisconnect = false  // Flag to prevent double saving
         btnConnect.addEventListener("click", function () {
             // disconnect if connected already
             if (connection) {
+                // Set flag to indicate manual disconnect
+                isManualDisconnect = true
                 // Save files before disconnecting
                 saveAllFiles("Manual disconnect")
                 
@@ -249,11 +252,18 @@ setTimeout(function() {
                     // Add disconnect event listener to handle connection loss
                     connection.on("close", function() {
                         console.log("Connection lost unexpectedly")
-                        // Only save if we haven't already saved (connection still exists)
-                        if (connection) {
+                        // Only save if it's not a manual disconnect and connection still exists
+                        if (connection && !isManualDisconnect) {
                             saveAllFiles("Connection lost")
                             connection = undefined
                             pMain.textContent = 'Connection lost - Files saved automatically'
+                            btnConnect.textContent = 'Connect'
+                            btnMarker.disabled = true
+                        } else if (isManualDisconnect) {
+                            // Reset the flag and clean up UI for manual disconnect
+                            isManualDisconnect = false
+                            connection = undefined
+                            pMain.textContent = 'Ready to connect'
                             btnConnect.textContent = 'Connect'
                             btnMarker.disabled = true
                         }
@@ -269,6 +279,7 @@ setTimeout(function() {
                     result.ppg = []
                     result.steps = []
                     result.hr = []
+                    result.markers = []  // Initialize markers array to ensure it exists
                     // Handle the data we get back, and call 'onLine'
                     // whenever we get a new line
                     var buf = "";
