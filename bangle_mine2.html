@@ -224,11 +224,14 @@ setTimeout(function() {
                 // Save files before disconnecting
                 saveAllFiles("Manual disconnect")
                 
-                connection.close()
-                connection = undefined
+                // Clean up UI immediately
                 pMain.textContent = 'Ready to connect'
                 btnConnect.textContent = 'Connect'  // Reset button text
                 btnMarker.disabled = true  // Disable marker
+                
+                // Close connection (this will trigger the close event)
+                connection.close()
+                // Don't set connection = undefined here, let the close event handler do it
 
                 return
             } else {
@@ -251,22 +254,23 @@ setTimeout(function() {
                     
                     // Add disconnect event listener to handle connection loss
                     connection.on("close", function() {
-                        console.log("Connection lost unexpectedly")
-                        // Only save if it's not a manual disconnect and connection still exists
-                        if (connection && !isManualDisconnect) {
+                        console.log("Connection close event triggered. isManualDisconnect:", isManualDisconnect)
+                        
+                        if (!isManualDisconnect) {
+                            // This is an unexpected connection loss - save files
+                            console.log("Unexpected connection loss - saving files")
                             saveAllFiles("Connection lost")
-                            connection = undefined
                             pMain.textContent = 'Connection lost - Files saved automatically'
                             btnConnect.textContent = 'Connect'
                             btnMarker.disabled = true
-                        } else if (isManualDisconnect) {
-                            // Reset the flag and clean up UI for manual disconnect
+                        } else {
+                            // This is a manual disconnect - files already saved, just reset flag
+                            console.log("Manual disconnect confirmed - resetting flag")
                             isManualDisconnect = false
-                            connection = undefined
-                            pMain.textContent = 'Ready to connect'
-                            btnConnect.textContent = 'Connect'
-                            btnMarker.disabled = true
                         }
+                        
+                        // Always clean up connection reference
+                        connection = undefined
                     })
                     
                     // initialise result
