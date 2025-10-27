@@ -127,8 +127,8 @@ setTimeout(function() {
         // Function to save all files
         function saveAllFiles(disconnectReason = "Manual disconnect") {
             result.endTs = new Date()
-            // Add 2 hours for local time (consistent with startTs)
-            result.endTs.setHours(result.endTs.getHours() + 2)
+            // Add 1 or 2 hours for local time (consistent with startTs)
+            result.endTs.setHours(result.endTs.getHours() + 1)
             console.log("Saving files due to:", disconnectReason)
             console.log(result)
             
@@ -276,8 +276,8 @@ setTimeout(function() {
                     // initialise result
                     result.startTs = new Date() // This will be overwritten by Bangle timestamp
                     result.startTs2 = new Date() // Phone/WebApp timestamp
-                    // Add 2 hours to phone timestamp for Italian time
-                    result.startTs2.setHours(result.startTs2.getHours() + 2)
+                    // Add 1 or2 hours to phone timestamp for Italian time
+                    result.startTs2.setHours(result.startTs2.getHours() + 1)
                     // result.startTs = []
                     result.accel = []
                     result.ppg = []
@@ -316,8 +316,8 @@ setTimeout(function() {
         btnMarker.addEventListener("click", function () {
             if (connection) {  // Solo se connesso
                 let markerTime = new Date()
-                // Add 2 hours to marker time for Italian time (consistent with other timestamps)
-                markerTime.setHours(markerTime.getHours() + 2)
+                // Add 1 or 2 hours to marker time for Italian time (consistent with other timestamps)
+                markerTime.setHours(markerTime.getHours() + 1)
                 if (!result.markers) {
                     result.markers = []
                 }
