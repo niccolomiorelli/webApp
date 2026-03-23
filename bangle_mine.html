@@ -197,8 +197,8 @@ setTimeout(function() {
                 let duration = new Date(result.endTs).getTime() - new Date(result.startTs).getTime()
                 // let timestampsContent = `Start Time: ${result.startTs.toISOString()}\nEnd Time: ${result.endTs.toISOString()}\nDuration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)`
                 let timestampsContent = 
-                    `Start Time (Local): ${result.startTs.toISOString()}\n` +
-                    `End Time (Local): ${result.endTs.toISOString()}\n` +
+                    `Start Time (UTC): ${result.startTs.toISOString()}\n` +
+                    `End Time (UTC): ${result.endTs.toISOString()}\n` +
                     `Duration: ${duration} ms (${(duration/1000).toFixed(2)} seconds)\n` +
                     `Start Unix (ms): ${result.startTs.getTime()}\n` +
                     `End Unix (ms): ${result.endTs.getTime()}\n` +
